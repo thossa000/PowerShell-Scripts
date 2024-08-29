@@ -20,5 +20,6 @@ Start-Sleep -Milliseconds 500
 $Info | Export-csv C:\Users\thossa000\Downloads\GuestUserLastSignins.csv -NoTypeInformation -Append
 Remove-Variable Info
 }
-
+Disconnect-AzureAD
 Write-Host -ForegroundColor Green "Exported Logs successfully"
+Get-PSsession | Exit-PSSession

@@ -1,0 +1,27 @@
+$data = import-csv '.\Zscaler AI List.csv'
+$groupedData = $data | Group-Object -Property User
+
+$output = $groupedData | ForEach-Object {
+    $username = $_.Name
+    $userRecords =$_.Group
+
+    $dates = $userRecords."Event Time" | ForEach-Object { [datetime]$_ }
+    $startDate = ($dates | Sort-Object)[0].ToString("yyy-MM-dd")
+#    $endDate = ($dates | Sort-Object -Descending)[0].ToString("yyy-MM-dd")
+
+    $locations = $userRecords.Location | Sort-Object -Unique -CaseSensitive
+    $locationList = $locations -join ", "
+
+    $websites = $userRecords."Cloud Application" | Sort-Object -Unique -CaseSensitive
+    $websiteList = $websites -join ", "
+
+    $count = $userRecords.Count
+
+    [PSCustomObject]@{
+        DateRange = "$startDate"
+        Email = $username
+        Count = $count
+        Websites = $websiteList
+        Location = $locationList
+    }
+}

@@ -1,51 +1,72 @@
-﻿# Identify and load the daily .txt file.
-
+# Identify and load the daily .txt file.
+ 
 #Searching for a daily .txt file to check for user accounts.
 $date = Get-Date -format 'yyyy-MM-dd'
-$txtFile = Get-ChildItem ".\Disabled Users\$date.txt" -ErrorAction SilentlyContinue | Select Name | Select-Object -ExpandProperty Name
+$logDate = Get-Date -format 'yyyy-MM-dd HH:mm:ss'
+$currentUser = $env:USERNAME
+ 
+if("C:\Users\$currentUser\Documents\Powershell\logs\$date log.txt" -eq $false)
+{
+    New-Item -Path "C:\Users\$currentUser\Documents\Powershell\logs\$date log.txt" -ItemType File
+}
+ 
+$logFile = "C:\Users\$currentUser\Documents\Powershell\logs\$date log.txt"
+ 
+Add-Content -Path $logFile -Value "$logDate Start Script"
+$txtFile = Get-ChildItem "C:\Users\$currentUser\Documents\Powershell\Disabled Users\$date.txt" -ErrorAction SilentlyContinue | Select Name | Select-Object -ExpandProperty Name
 $txtFileExists = ''
 if($txtfile -ne $null)
-{
-Write-Host "Running disablement for users in $txtfile" -ForegroundColor Green
-$txtFileExists=$true
-$txtFilePath= Get-ChildItem ".\Disabled Users\$date.txt" | Select Fullname | Select-Object -ExpandProperty Fullname
+{ 
+    $txtFileExists=$true
+    $txtFilePath= Get-ChildItem ".\Disabled Users\$date.txt" | Select Fullname | Select-Object -ExpandProperty Fullname
+    Add-Content -Path $logFile -Value "Text file found. Running disablement for users in $txtfile"
 }
 else
 {
-Write-Host "ERROR NO FILE FOUND FOR TODAY IN THE DIRECTORY, PLEASE CHECK .txt FILE IF FILE EXPECTED" -ForegroundColor Red
-$txtFileExists=$false
+    Add-Content -Path $logFile -Value "ERROR: NO FILE FOUND FOR TODAY IN THE DIRECTORY, PLEASE CHECK .txt FILE IF FILE EXPECTED"
+    $txtFileExists=$false
+    exit
 }
-
+ 
 if($txtFileExists -eq $True)
 {
-$usernames = Get-Content $txtFilePath -ErrorAction SilentlyContinue
+    $usernames = Get-Content $txtFilePath -ErrorAction SilentlyContinue
     if ([string]::IsNullOrWhiteSpace($usernames)) {
-    # Email analyst and let them no nothing was sent today but the file exists.
-        Write-Host "The file exists but is blank." -ForegroundColor Yellow
+    Add-Content -Path $logFile -Value "ERROR: No users found in $txtfile"
+    exit
     } else {
         $usernames
+        Add-Content -Path $logFile -Value "Grabbing user information for $usernames"
     }
 }
 else
 {
-# Email just to tell him no file exists for the script to use today.
+Add-Content -Path $logFile -Value "ERROR: No $txtfile found in Disabled Users directory."
+exit
 }
-
+ 
 # Query the users’ in the text file and grab their information from AD.
-foreach($user in $usernames)
-{
-get-aduser $usernames
-# Gather properties required for next tasks into a variable.
-# Create error handling for usernames that do not exist.
+ 
+$userDisableList = @()
+ 
+foreach ($user in $usernames) {
+    try {
+        $userInfo = Get-ADUser -Identity $user -Properties City, DisplayName, Department, Description, EmailAddress, EmployeeID, Manager, MemberOf, Office, SamAccountName, SID, Title, Enabled |
+            Select-Object City, DisplayName, Department, Description, EmailAddress, EmployeeID, Manager, MemberOf, Office, SamAccountName, SID, Title, Enabled
+        Add-Content -Path $logFile -Value "Retrieved user info for $user"
+        if ($userInfo) {
+            $userDisableList += $userInfo
+        }
+    }
+    catch {
+        Add-Content -Path $logFile -Value "ERROR: Failed to retrieve info for user: $user. Error: $_"
+        exit
+    }
 }
-
+ 
 # Disable their account.
-
-
-
-# Update their description.
-
-
-
-# Email the actions completed by the script to the IAM team.
-
+foreach ($user in $userDisableList) {
+$logDate = Get-Date -format 'yyyy-MM-dd HH:mm:ss'
+Set-ADUser $user.SamAccountName -Enabled $false -Description "Disabled by PS Script on $date"
+Add-Content -Path $logFile -Value "$logDate Disabled user $user"
+}
